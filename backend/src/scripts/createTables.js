@@ -4,10 +4,10 @@ import { ApiError } from "../utils/ApiError.js";
 const dbQuery = async (query, params = []) => {
   try {
     const [results] = await db.promise().query(query, params);
-    console.log("✅ Executed:", query.split("(")[0].trim());
+    console.log(" Executed:", query.split("(")[0].trim());
     return results;
   } catch (error) {
-    console.error("❌ Error executing query:", error.message);
+    console.error(" Error executing query:", error.message);
     throw new ApiError(500, "Database Error");
   }
 };
