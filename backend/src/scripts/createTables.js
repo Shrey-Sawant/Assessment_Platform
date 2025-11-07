@@ -123,17 +123,6 @@ const tableQueries = [
     FOREIGN KEY (ExamID) REFERENCES Exams(exam_id) ON DELETE CASCADE,
     FOREIGN KEY (Q_ID) REFERENCES QuestionBank(Q_ID) ON DELETE CASCADE
   )`,
-  `CREATE TABLE IF NOT EXISTS ReviewedResponses (
-  ReviewID INT PRIMARY KEY AUTO_INCREMENT,
-  ResponseID INT NOT NULL,
-  ReviewedByTeacher INT DEFAULT NULL,
-  ReviewedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  Comments TEXT,
-  FinalScore INT,
-  FOREIGN KEY (ResponseID) REFERENCES StudentResponses(ResponseID) ON DELETE CASCADE,
-  FOREIGN KEY (ReviewedByTeacher) REFERENCES Teachers(teacher_id) ON DELETE SET NULL
-) ENGINE=InnoDB;
-`,
 ];
 
 const setupDatabase = async () => {
