@@ -12,6 +12,19 @@ const dbQuery = async (query, params = []) => {
   }
 };
 
+const dropQueries = [
+  "DROP TABLE IF EXISTS ExamQuestions",
+  "DROP TABLE IF EXISTS StudentResponses",
+  "DROP TABLE IF EXISTS StudentExamAllocations",
+  "DROP TABLE IF EXISTS TeacherExamAllocations",
+  "DROP TABLE IF EXISTS GeneratedExams",
+  "DROP TABLE IF EXISTS Exams",
+  "DROP TABLE IF EXISTS QuestionBank",
+  "DROP TABLE IF EXISTS Students",
+  "DROP TABLE IF EXISTS Teachers",
+  "DROP TABLE IF EXISTS Admins",
+];
+
 const tableQueries = [
   `CREATE TABLE IF NOT EXISTS Admins (
     admin_id INT PRIMARY KEY AUTO_INCREMENT,
@@ -19,7 +32,8 @@ const tableQueries = [
     MName VARCHAR(100),
     LName VARCHAR(100),
     Email VARCHAR(255) UNIQUE NOT NULL,
-    Phone VARCHAR(20)
+    Phone VARCHAR(20),
+    Password VARCHAR(255) NOT NULL
   )`,
   `CREATE TABLE IF NOT EXISTS Teachers (
     teacher_id INT PRIMARY KEY AUTO_INCREMENT,
@@ -27,7 +41,8 @@ const tableQueries = [
     MName VARCHAR(100),
     LName VARCHAR(100),
     Email VARCHAR(255) UNIQUE NOT NULL,
-    Phone VARCHAR(20)
+    Phone VARCHAR(20),
+    Password VARCHAR(255) NOT NULL
   )`,
   `CREATE TABLE IF NOT EXISTS Students (
     Uid INT PRIMARY KEY AUTO_INCREMENT,
@@ -37,7 +52,8 @@ const tableQueries = [
     Email VARCHAR(255) UNIQUE NOT NULL,
     Phone VARCHAR(20),
     DOB DATE,
-    Age INT 
+    Age INT,
+    Password VARCHAR(255) NOT NULL
   )`,
   `CREATE TABLE IF NOT EXISTS QuestionBank (
     Q_ID INT PRIMARY KEY AUTO_INCREMENT,
@@ -50,7 +66,7 @@ const tableQueries = [
     Duration INT NOT NULL,
     Marks INT NOT NULL,
     Questions LONGTEXT NOT NULL,
-    CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ,
+    CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CreatedByAdmin INT,
     FOREIGN KEY (CreatedByAdmin) REFERENCES Admins(admin_id) ON DELETE SET NULL
   )`,
@@ -60,7 +76,7 @@ const tableQueries = [
     Code VARCHAR(100) NOT NULL,
     SourceExamID INT NOT NULL,
     CreatedByAdmin INT,
-    CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ,
+    CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     Duration INT NOT NULL,
     TotalMarks INT NOT NULL,
     ScheduledDateTime DATETIME,
@@ -106,16 +122,33 @@ const tableQueries = [
     PRIMARY KEY (ExamID, Q_ID),
     FOREIGN KEY (ExamID) REFERENCES Exams(exam_id) ON DELETE CASCADE,
     FOREIGN KEY (Q_ID) REFERENCES QuestionBank(Q_ID) ON DELETE CASCADE
-  )`
+  )`,
+  `CREATE TABLE IF NOT EXISTS ReviewedResponses (
+  ReviewID INT PRIMARY KEY AUTO_INCREMENT,
+  ResponseID INT NOT NULL,
+  ReviewedByTeacher INT DEFAULT NULL,
+  ReviewedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  Comments TEXT,
+  FinalScore INT,
+  FOREIGN KEY (ResponseID) REFERENCES StudentResponses(ResponseID) ON DELETE CASCADE,
+  FOREIGN KEY (ReviewedByTeacher) REFERENCES Teachers(teacher_id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+`,
 ];
 
 const setupDatabase = async () => {
   try {
-    console.log("Starting database setup...");
+    console.log("🧹 Dropping existing tables...");
+    for (const query of dropQueries) {
+      await dbQuery(query);
+    }
+
+    console.log("🚀 Creating new tables...");
     for (const query of tableQueries) {
       await dbQuery(query);
     }
-    console.log(" All tables created successfully!");
+
+    console.log(" All tables dropped and recreated successfully!");
     process.exit(0);
   } catch (error) {
     console.error(" Database setup failed:", error);
