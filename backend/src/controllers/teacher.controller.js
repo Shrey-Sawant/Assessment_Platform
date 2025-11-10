@@ -194,17 +194,6 @@ const createReviewedResponse = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Student response not found.");
   }
 
-  // Insert review record
-  const [result] = await db.query(
-    `INSERT INTO ReviewedResponses (ResponseID, ReviewedByTeacher, Comments, FinalScore)
-     VALUES (?, ?, ?, ?)`,
-    [ResponseID, ReviewedByTeacher, Comments || null, FinalScore || null]
-  );
-
-  if (!result.insertId) {
-    throw new ApiError(500, "Failed to create reviewed response record.");
-  }
-
   // Update main StudentResponses table to mark as reviewed
   await db.query(
     `UPDATE StudentResponses
