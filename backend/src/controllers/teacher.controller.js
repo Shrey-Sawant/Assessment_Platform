@@ -26,8 +26,8 @@ const dbQuery = async (query, params) => {
 const generateToken = (teacher) => {
   return jwt.sign(
     { id: teacher.teacher_id, email: teacher.Email },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRATION }
+    process.env.ACCESS_TOKEN_SECRET,
+    { expiresIn: process.env.ACCESS_TOKEN_EXPIRY }
   );
 };
 
@@ -139,7 +139,7 @@ const update = asyncHandler(async (req, res, next) => {
 
   const existingTeacher = await dbQuery(
     "SELECT * FROM Teachers WHERE Email = ? AND teacher_id != ?",
-    [Email, teacher.id]
+    [Email, teacher.teacher_id]
   );
   if (existingTeacher.length > 0) {
     return next(new ApiError(400, "Email already in use"));
@@ -160,7 +160,7 @@ const update = asyncHandler(async (req, res, next) => {
     Email,
     Phone,
     hashedPassword,
-    teacher.id,
+    teacher.teacher_id,
   ]);
 
   if (result.affectedRows === 0) {

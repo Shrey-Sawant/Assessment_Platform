@@ -11,7 +11,7 @@ export const verifyTeacherToken = (req, res, next) => {
       throw new ApiError(401, "Authentication token missing");
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
     req.user = decoded; 
     next();
   } catch (error) {

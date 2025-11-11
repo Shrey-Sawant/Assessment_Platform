@@ -14,12 +14,10 @@ const router = express.Router();
  * @base /api/exams
  */
 
-// ✅ Public/Authorized users (Admin/Teacher/Student) — can GET
 router.get("/", getExam);
 router.get("/:id", getExam);
 
-// 🔒 Admin-only routes
-router.post("/", verifyTeacherToken , createExam);
+router.post("/createExam", verifyTeacherToken , createExam);
 router.put("/:id", verifyTeacherToken, updateExam);
 router.delete("/:id", verifyTeacherToken, deleteExam);
 

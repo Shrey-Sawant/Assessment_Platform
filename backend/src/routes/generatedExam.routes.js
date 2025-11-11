@@ -4,7 +4,7 @@ import {
   getAllGeneratedExams,
   updateGeneratedExam,
   deleteGeneratedExam,
-} from "../controllers/generatedExam.controller.js";
+} from "../controllers/generatedExams.controller.js";
 import { verifyAdmin } from "../middlewares/adminAuth.middleware.js";
 
 const router = express.Router();

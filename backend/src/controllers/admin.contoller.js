@@ -1,5 +1,5 @@
 import db from "../db/index.js";
-import { asyncHandler } from "../utils/asyncHaldler.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import bcrypt from "bcryptjs";
@@ -26,8 +26,8 @@ const dbQuery = async (query, params) => {
 const generateToken = (admin) => {
   return jwt.sign(
     { id: admin.admin_id, email: admin.Email },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRATION }
+    process.env.ACCESS_TOKEN_SECRET,
+    { expiresIn: process.env.ACCESS_TOKEN_EXPIRY }
   );
 };
 
@@ -65,7 +65,7 @@ const register = asyncHandler(async (req, res, next) => {
 
     const insertQuery = `
       INSERT INTO Admins (FName, MName, LName, Email, Phone,Password)
-      VALUES (?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?)
     `;
     const result = await dbQuery(insertQuery, [
       FName,
@@ -106,10 +106,8 @@ const login = asyncHandler(async (req, res, next) => {
       return next(new ApiError(401, "Invalid credentials: Admin not found"));
     }
 
-    const isMatch = await bcrypt.compare(
-      password,
-      process.env.ADMIN_DEFAULT_PASSWORD_HASH
-    );
+    const isMatch = await bcrypt.compare(password, admin[0].Password);
+
     if (!isMatch) {
       return next(new ApiError(401, "Invalid credentials: Incorrect password"));
     }
@@ -133,7 +131,7 @@ const login = asyncHandler(async (req, res, next) => {
  */
 const update = asyncHandler(async (req, res, next) => {
   const { FName, MName, LName, Email, Phone, Password } = req.body;
-  const admin = req?.user;
+  const admin = req?.admin;
 
   if (!admin) {
     return next(new ApiError(400, "Admin not authenticated"));
@@ -160,9 +158,11 @@ const update = asyncHandler(async (req, res, next) => {
       return next(new ApiError(400, "Email already in use"));
     }
 
+    const hashedPassword = await bcrypt.hash(Password, 10);
+
     const updateQuery = `
       UPDATE Admins
-      SET FName = ?, MName = ?, LName = ?, Email = ?, Phone = ? , Password = ?
+      SET FName = ?, MName = ?, LName = ?, Email = ?, Phone = ?, Password = ?
       WHERE admin_id = ?
     `;
 
@@ -170,24 +170,33 @@ const update = asyncHandler(async (req, res, next) => {
       .promise()
       .query(updateQuery, [
         FName,
-        MName,
+        MName || "",
         LName,
         Email,
         Phone,
-        Password,
-        admin.id,
+        hashedPassword,
+        admin.admin_id,
       ]);
 
     if (result.affectedRows === 0) {
       return next(new ApiError(404, "Admin not found"));
     }
 
+    const [updatedAdmin] = await db
+      .promise()
+      .query(
+        "SELECT admin_id, FName, MName, LName, Email, Phone FROM Admins WHERE admin_id = ?",
+        [admin.id]
+      );
+
     return res
       .status(200)
-      .json(new ApiResponse(200, result, "Admin updated successfully"));
+      .json(
+        new ApiResponse(200, updatedAdmin[0], "Admin updated successfully")
+      );
   } catch (error) {
     console.error("Update error:", error);
-    return next(new ApiError(500, "Server error"));
+    return next(new ApiError(500, "Server error during update"));
   }
 });
 
@@ -207,8 +216,9 @@ const createTeacherExamAllocation = asyncHandler(async (req, res) => {
     );
   }
 
-  const [result] = await db.query(
-    `INSERT INTO TeacherExamAllocations (teacher_id, exam_id, AllocatedByAdmin, AllocatedStudentIDs)
+  const result = await dbQuery(
+    `INSERT INTO TeacherExamAllocations 
+     (teacher_id, exam_id, AllocatedByAdmin, AllocatedStudentIDs)
      VALUES (?, ?, ?, ?)`,
     [teacher_id, exam_id, AllocatedByAdmin, AllocatedStudentIDs || null]
   );
@@ -252,7 +262,7 @@ const getTeacherExamAllocations = asyncHandler(async (req, res) => {
     }
   }
 
-  const [rows] = await db.query(query, params);
+  const rows = await dbQuery(query, params); // ✅ use our helper
 
   res
     .status(200)
@@ -281,7 +291,7 @@ const createStudentExamAllocation = asyncHandler(async (req, res) => {
   }
 
   // Check if allocation already exists
-  const [existing] = await db.query(
+  const existing = await dbQuery(
     `SELECT * FROM StudentExamAllocations WHERE student_id = ? AND exam_id = ?`,
     [student_id, exam_id]
   );
@@ -293,7 +303,7 @@ const createStudentExamAllocation = asyncHandler(async (req, res) => {
     );
   }
 
-  const [result] = await db.query(
+  const result = await dbQuery(
     `INSERT INTO StudentExamAllocations (student_id, exam_id, AllocatedByAdmin)
      VALUES (?, ?, ?)`,
     [student_id, exam_id, AllocatedByAdmin]
@@ -338,7 +348,7 @@ const getStudentExamAllocations = asyncHandler(async (req, res) => {
     }
   }
 
-  const [rows] = await db.query(query, params);
+  const rows = await dbQuery(query, params); // ✅ safe promise-based helper
 
   res
     .status(200)

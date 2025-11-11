@@ -5,7 +5,7 @@ import {
   update,
   createReviewedResponse,
   getReviewedResponses,
-} from "../controllers/teacherController.js";
+} from "../controllers/teacher.controller.js";
 
 import { verifyTeacherToken } from "../middlewares/teacherAuth.middleware.js";
 

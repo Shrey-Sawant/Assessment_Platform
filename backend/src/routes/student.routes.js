@@ -5,7 +5,7 @@ import {
   update,
   createStudentResponse,
   getStudentResponses,
-} from "../controllers/studentController.js";
+} from "../controllers/student.controller.js";
 import { verifyStudentToken } from "../middlewares/studentAuth.middleware.js"; 
 
 const router = express.Router();

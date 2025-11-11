@@ -26,8 +26,8 @@ const dbQuery = async (query, params) => {
 const generateToken = (student) => {
   return jwt.sign(
     { id: student.Uid, email: student.Email },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRATION }
+    process.env.ACCESS_TOKEN_SECRET,
+    { expiresIn: process.env.ACCESS_TOKEN_EXPIRY }
   );
 };
 

@@ -15,9 +15,8 @@ const router = express.Router();
 router.post("/register", register);
 router.post("/login", login);
 
-router.use(verifyAdmin);
 
-router.put("/update", update);
+router.put("/update",verifyAdmin, update);
 router.post("/allocate-students", createStudentExamAllocation);
 router.get("/student-allocations", getStudentExamAllocations);
 router.post("/allocate-teachers", createTeacherExamAllocation);
