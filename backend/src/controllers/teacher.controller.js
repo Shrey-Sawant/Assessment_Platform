@@ -114,7 +114,9 @@ const login = asyncHandler(async (req, res, next) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { ...teacher[0], token }, "Successfully logged in"));
+    .json(
+      new ApiResponse(200, { ...teacher[0], token }, "Successfully logged in")
+    );
 });
 
 /**
@@ -123,7 +125,6 @@ const login = asyncHandler(async (req, res, next) => {
 const update = asyncHandler(async (req, res, next) => {
   const { FName, MName, LName, Email, Phone, Password } = req.body;
   const teacher = req?.user;
-
   if (!teacher) {
     return next(new ApiError(400, "Teacher not authenticated"));
   }
@@ -139,7 +140,7 @@ const update = asyncHandler(async (req, res, next) => {
 
   const existingTeacher = await dbQuery(
     "SELECT * FROM Teachers WHERE Email = ? AND teacher_id != ?",
-    [Email, teacher.teacher_id]
+    [Email, teacher.id]
   );
   if (existingTeacher.length > 0) {
     return next(new ApiError(400, "Email already in use"));
@@ -160,7 +161,7 @@ const update = asyncHandler(async (req, res, next) => {
     Email,
     Phone,
     hashedPassword,
-    teacher.teacher_id,
+    teacher.id,
   ]);
 
   if (result.affectedRows === 0) {
@@ -247,9 +248,17 @@ const getReviewedResponses = asyncHandler(async (req, res) => {
 
   const [rows] = await db.query(query, params);
 
-  res.status(200).json(
-    new ApiResponse(200, rows, "Reviewed responses retrieved successfully.")
-  );
+  res
+    .status(200)
+    .json(
+      new ApiResponse(200, rows, "Reviewed responses retrieved successfully.")
+    );
 });
 
-export { register, login, update, createReviewedResponse, getReviewedResponses };
+export {
+  register,
+  login,
+  update,
+  createReviewedResponse,
+  getReviewedResponses,
+};

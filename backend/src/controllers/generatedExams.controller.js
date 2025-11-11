@@ -3,13 +3,30 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 
+const options = {
+  httpOnly: true,
+  secure: true,
+  sameSite: "None",
+  path: "/",
+  maxAge: process.env.JWT_EXPIRATION,
+};
+
+const dbQuery = async (query, params) => {
+  try {
+    const [results] = await db.promise().query(query, params);
+    return results;
+  } catch (error) {
+    console.error(error);
+    throw new ApiError(500, "Database Error");
+  }
+};
 /**
  * @desc Create a new Generated Exam
  * @route POST /api/generated-exams
  * @access Private (Admin)
  */
 const createGeneratedExam = asyncHandler(async (req, res, next) => {
-  const {
+  let {
     Title,
     Code,
     SourceExamID,
@@ -21,51 +38,69 @@ const createGeneratedExam = asyncHandler(async (req, res, next) => {
   } = req.body;
 
   if (!Title || !Code || !SourceExamID || !Duration || !TotalMarks) {
-    throw new ApiError(400, "Required fields are missing.");
+    return next(new ApiError(400, "All fields are required"));
   }
 
-  const trimmedTitle = Title.trim();
-  const trimmedCode = Code.trim();
+  Title = Title.trim();
+  Code = Code.trim();
 
-  const [existing] = await db.execute(
-    "SELECT Code FROM GeneratedExams WHERE Code = ?",
-    [trimmedCode]
+  const existingExam = await dbQuery(
+    "SELECT * FROM GeneratedExams WHERE Code = ?",
+    [Code]
   );
-  if (existing.length > 0) {
-    throw new ApiError(409, "Exam code already exists.");
+  if (existingExam.length > 0) {
+    return next(new ApiError(400, "Exam code already exists"));
   }
 
-  const [exam] = await db.execute(
+  const sourceExam = await dbQuery(
     "SELECT exam_id FROM Exams WHERE exam_id = ?",
     [SourceExamID]
   );
-  if (exam.length === 0) {
-    throw new ApiError(400, "Invalid SourceExamID provided.");
+  if (sourceExam.length === 0) {
+    return next(new ApiError(400, "Invalid SourceExamID"));
   }
 
-  const [result] = await db.execute(
-    `INSERT INTO GeneratedExams 
-     (Title, Code, SourceExamID, CreatedByAdmin, Duration, TotalMarks, ScheduledDateTime, CalculatorAllowed, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-    [
-      trimmedTitle,
-      trimmedCode,
-      SourceExamID,
-      CreatedByAdmin || null,
-      Duration,
-      TotalMarks,
-      ScheduledDateTime || null,
-      CalculatorAllowed || false,
-    ]
-  );
+  // 🧾 No created_at column here
+  const insertQuery = `
+    INSERT INTO GeneratedExams 
+    (Title, Code, SourceExamID, CreatedByAdmin, Duration, TotalMarks, ScheduledDateTime, CalculatorAllowed)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  const result = await dbQuery(insertQuery, [
+    Title,
+    Code,
+    SourceExamID,
+    CreatedByAdmin || null,
+    Duration,
+    TotalMarks,
+    ScheduledDateTime || null,
+    CalculatorAllowed || false,
+  ]);
+
+  if (result.affectedRows === 0) {
+    return next(new ApiError(500, "Failed to create generated exam"));
+  }
+
+  const newGeneratedExam = {
+    GeneratedExamID: result.insertId,
+    Title,
+    Code,
+    SourceExamID,
+    CreatedByAdmin,
+    Duration,
+    TotalMarks,
+    ScheduledDateTime,
+    CalculatorAllowed,
+  };
 
   return res
     .status(201)
     .json(
       new ApiResponse(
         201,
-        { GeneratedExamID: result.insertId },
-        "Generated exam created successfully."
+        newGeneratedExam,
+        "Generated exam created successfully"
       )
     );
 });
@@ -76,17 +111,35 @@ const createGeneratedExam = asyncHandler(async (req, res, next) => {
  * @access Private (Admin)
  */
 const getAllGeneratedExams = asyncHandler(async (req, res, next) => {
-  const [rows] = await db.execute(`
-    SELECT ge.*, e.Title AS SourceExamTitle, a.Name AS CreatedBy
-    FROM GeneratedExams ge
-    LEFT JOIN Exams e ON ge.SourceExamID = e.exam_id
-    LEFT JOIN Admins a ON ge.CreatedByAdmin = a.admin_id
-    ORDER BY ge.GeneratedExamID DESC
-  `);
+  try {
+    const [rows] = await db.promise().query(`
+      SELECT 
+        ge.GeneratedExamID,
+        ge.Title,
+        ge.Code,
+        ge.SourceExamID,
+        e.Title AS SourceExamTitle,
+        ge.CreatedByAdmin,
+        a.Name AS CreatedBy,
+        ge.Duration,
+        ge.TotalMarks,
+        ge.ScheduledDateTime,
+        ge.CalculatorAllowed
+      FROM GeneratedExams ge
+      LEFT JOIN Exams e ON ge.SourceExamID = e.exam_id
+      LEFT JOIN Admins a ON ge.CreatedByAdmin = a.admin_id
+      ORDER BY ge.GeneratedExamID DESC
+    `);
 
-  return res
-    .status(200)
-    .json(new ApiResponse(200, rows, "Generated exams fetched successfully."));
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(200, rows, "Generated exams fetched successfully.")
+      );
+  } catch (error) {
+    console.error("Database Error:", error);
+    return res.status(500).json(new ApiResponse(500, [], "Database Error"));
+  }
 });
 
 /**
@@ -109,30 +162,33 @@ const updateGeneratedExam = asyncHandler(async (req, res, next) => {
   const trimmedTitle = Title?.trim();
   const trimmedCode = Code?.trim();
 
+  // ✅ Check for duplicate code
   if (Code) {
-    const [existing] = await db.execute(
-      "SELECT Code FROM GeneratedExams WHERE Code = ? AND GeneratedExamID != ?",
-      [trimmedCode, id]
-    );
+    const [existing] = await db
+      .promise()
+      .query(
+        "SELECT Code FROM GeneratedExams WHERE Code = ? AND GeneratedExamID != ?",
+        [trimmedCode, id]
+      );
     if (existing.length > 0) {
       throw new ApiError(409, "Exam code already exists.");
     }
   }
 
+  // ✅ Validate SourceExamID exists
   if (SourceExamID) {
-    const [exam] = await db.execute(
-      "SELECT exam_id FROM Exams WHERE exam_id = ?",
-      [SourceExamID]
-    );
+    const [exam] = await db
+      .promise()
+      .query("SELECT exam_id FROM Exams WHERE exam_id = ?", [SourceExamID]);
     if (exam.length === 0) {
       throw new ApiError(400, "Invalid SourceExamID provided.");
     }
   }
 
-  const [result] = await db.execute(
+  const [result] = await db.promise().query(
     `UPDATE GeneratedExams 
      SET Title = ?, Code = ?, SourceExamID = ?, Duration = ?, 
-         TotalMarks = ?, ScheduledDateTime = ?, CalculatorAllowed = ?, updated_at = NOW()
+         TotalMarks = ?, ScheduledDateTime = ?, CalculatorAllowed = ?
      WHERE GeneratedExamID = ?`,
     [
       trimmedTitle,
