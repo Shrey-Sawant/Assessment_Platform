@@ -26,7 +26,10 @@ const createQB = asyncHandler(async (req, res, next) => {
   }
 
   Title = Title.trim();
-  Questions = typeof Questions === "object" ? JSON.stringify(Questions) : Questions.trim();
+  Questions =
+    typeof Questions === "object"
+      ? JSON.stringify(Questions)
+      : Questions.trim();
 
   const insertQuery = `
     INSERT INTO QuestionBank (Title, Questions)
@@ -66,7 +69,12 @@ const getQB = asyncHandler(async (req, res, next) => {
   const results = await dbQuery(query, params);
 
   if (results.length === 0) {
-    return next(new ApiError(404, id ? "Question Bank not found" : "No Question Banks found"));
+    return next(
+      new ApiError(
+        404,
+        id ? "Question Bank not found" : "No Question Banks found"
+      )
+    );
   }
 
   return res
@@ -88,10 +96,18 @@ const updateQB = asyncHandler(async (req, res, next) => {
   }
 
   if (!Title && !Questions) {
-    return next(new ApiError(400, "At least one field (Title or Questions) is required for update"));
+    return next(
+      new ApiError(
+        400,
+        "At least one field (Title or Questions) is required for update"
+      )
+    );
   }
 
-  const existingQB = await dbQuery("SELECT * FROM QuestionBank WHERE Q_ID = ?", [id]);
+  const existingQB = await dbQuery(
+    "SELECT * FROM QuestionBank WHERE Q_ID = ?",
+    [id]
+  );
   if (existingQB.length === 0) {
     return next(new ApiError(404, "Question Bank not found"));
   }
@@ -109,7 +125,11 @@ const updateQB = asyncHandler(async (req, res, next) => {
     WHERE Q_ID = ?
   `;
 
-  const result = await dbQuery(updateQuery, [updatedTitle, updatedQuestions, id]);
+  const result = await dbQuery(updateQuery, [
+    updatedTitle,
+    updatedQuestions,
+    id,
+  ]);
 
   if (result.affectedRows === 0) {
     return next(new ApiError(500, "Failed to update Question Bank"));
@@ -117,7 +137,45 @@ const updateQB = asyncHandler(async (req, res, next) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { id, Title: updatedTitle, Questions: updatedQuestions }, "Question Bank updated successfully"));
+    .json(
+      new ApiResponse(
+        200,
+        { id, Title: updatedTitle, Questions: updatedQuestions },
+        "Question Bank updated successfully"
+      )
+    );
 });
 
-export { createQB, getQB, updateQB };
+/**
+ * @desc Delete a Question Bank entry
+ * @route DELETE /api/questionbank/:id
+ * @access Admin/Teacher
+ */
+const deleteQB = asyncHandler(async (req, res, next) => {
+  const { id } = req.params;
+
+  if (!id) {
+    return next(new ApiError(400, "Question Bank ID is required"));
+  }
+
+  const existingQB = await dbQuery(
+    "SELECT * FROM QuestionBank WHERE Q_ID = ?",
+    [id]
+  );
+  if (existingQB.length === 0) {
+    return next(new ApiError(404, "Question Bank not found"));
+  }
+
+  const deleteQuery = "DELETE FROM QuestionBank WHERE Q_ID = ?";
+  const result = await dbQuery(deleteQuery, [id]);
+
+  if (result.affectedRows === 0) {
+    return next(new ApiError(500, "Failed to delete Question Bank"));
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { id }, "Question Bank deleted successfully"));
+});
+
+export { createQB, getQB, updateQB, deleteQB };

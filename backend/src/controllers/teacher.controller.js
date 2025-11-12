@@ -195,7 +195,6 @@ const createReviewedResponse = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Student response not found.");
   }
 
-  // Update main StudentResponses table to mark as reviewed
   await db.query(
     `UPDATE StudentResponses
      SET IsReviewed = TRUE, ReviewedByTeacher = ?, Score = ?

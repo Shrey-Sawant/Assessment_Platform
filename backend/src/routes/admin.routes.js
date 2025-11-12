@@ -15,11 +15,12 @@ const router = express.Router();
 router.post("/register", register);
 router.post("/login", login);
 
-
-router.put("/update",verifyAdmin, update);
-router.post("/allocate-students", createStudentExamAllocation);
-router.get("/student-allocations", getStudentExamAllocations);
-router.post("/allocate-teachers", createTeacherExamAllocation);
-router.get("/teacher-allocations", getTeacherExamAllocations);
+router.put("/update", verifyAdmin, update);
+router.post("/allocate-students", verifyAdmin, createStudentExamAllocation);
+router.get("/student-allocations", verifyAdmin, getStudentExamAllocations);
+router.get("/student-allocations/:id", verifyAdmin, getStudentExamAllocations);
+router.post("/allocate-teachers", verifyAdmin, createTeacherExamAllocation);
+router.get("/teacher-allocations", verifyAdmin, getTeacherExamAllocations);
+router.get("/teacher-allocations/:id", verifyAdmin, getTeacherExamAllocations);
 
 export default router;

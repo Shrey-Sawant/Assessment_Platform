@@ -246,23 +246,45 @@ const createTeacherExamAllocation = asyncHandler(async (req, res) => {
 const getTeacherExamAllocations = asyncHandler(async (req, res) => {
   const { teacher_id, exam_id } = req.query;
 
-  let query = `SELECT * FROM TeacherExamAllocations`;
+  let query = `
+    SELECT 
+      tea.AllocationID,
+      t.teacher_id,
+      CONCAT(t.FName, ' ', t.LName) AS TeacherName,
+      e.exam_id,
+      e.Title AS ExamTitle,
+      tea.AllocatedByAdmin,
+      tea.AllocatedStudentIDs
+    FROM 
+      TeacherExamAllocations AS tea
+    INNER JOIN 
+      Teachers AS t ON t.teacher_id = tea.teacher_id
+    INNER JOIN 
+      Exams AS e ON e.exam_id = tea.exam_id
+  `;
+
   const params = [];
 
   if (teacher_id || exam_id) {
     query += " WHERE";
     if (teacher_id) {
-      query += " teacher_id = ?";
+      query += " tea.teacher_id = ?";
       params.push(teacher_id);
     }
     if (exam_id) {
       if (params.length) query += " AND";
-      query += " exam_id = ?";
+      query += " tea.exam_id = ?";
       params.push(exam_id);
     }
   }
 
-  const rows = await dbQuery(query, params); // ✅ use our helper
+  query += " ORDER BY tea.AllocationID DESC";
+
+  const rows = await dbQuery(query, params);
+
+  if (rows.length === 0) {
+    throw new ApiError(404, "No teacher exam allocations found");
+  }
 
   res
     .status(200)
@@ -330,25 +352,44 @@ const createStudentExamAllocation = asyncHandler(async (req, res) => {
  * @access Admin/Teacher
  */
 const getStudentExamAllocations = asyncHandler(async (req, res) => {
-  const { student_id, exam_id } = req.query;
+  const { exam_id, student_id } = req.query;
 
-  let query = `SELECT * FROM StudentExamAllocations`;
+  let query = `
+    SELECT 
+      s.Uid AS student_id,
+      CONCAT(s.FName, ' ', s.LName) AS StudentName,
+      sea.exam_id,
+      sea.AllocatedByAdmin
+    FROM 
+      StudentExamAllocations AS sea
+    INNER JOIN 
+      Students AS s ON s.Uid = sea.student_id
+  `;
+
   const params = [];
+  const conditions = [];
 
-  if (student_id || exam_id) {
-    query += " WHERE";
-    if (student_id) {
-      query += " student_id = ?";
-      params.push(student_id);
-    }
-    if (exam_id) {
-      if (params.length) query += " AND";
-      query += " exam_id = ?";
-      params.push(exam_id);
-    }
+  if (exam_id) {
+    conditions.push("sea.exam_id = ?");
+    params.push(exam_id);
   }
 
-  const rows = await dbQuery(query, params); // ✅ safe promise-based helper
+  if (student_id) {
+    conditions.push("sea.student_id = ?");
+    params.push(student_id);
+  }
+
+  if (conditions.length > 0) {
+    query += " WHERE " + conditions.join(" AND ");
+  }
+
+  query += " ORDER BY sea.AllocationID DESC"; // ✅ Safe column
+
+  const rows = await dbQuery(query, params);
+
+  if (!rows || rows.length === 0) {
+    throw new ApiError(404, "No student exam allocations found.");
+  }
 
   res
     .status(200)

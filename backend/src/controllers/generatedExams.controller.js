@@ -20,6 +20,7 @@ const dbQuery = async (query, params) => {
     throw new ApiError(500, "Database Error");
   }
 };
+
 /**
  * @desc Create a new Generated Exam
  * @route POST /api/generated-exams
@@ -36,6 +37,7 @@ const createGeneratedExam = asyncHandler(async (req, res, next) => {
     ScheduledDateTime,
     CalculatorAllowed,
   } = req.body;
+  const admin = req.admin;
 
   if (!Title || !Code || !SourceExamID || !Duration || !TotalMarks) {
     return next(new ApiError(400, "All fields are required"));
@@ -60,7 +62,6 @@ const createGeneratedExam = asyncHandler(async (req, res, next) => {
     return next(new ApiError(400, "Invalid SourceExamID"));
   }
 
-  // 🧾 No created_at column here
   const insertQuery = `
     INSERT INTO GeneratedExams 
     (Title, Code, SourceExamID, CreatedByAdmin, Duration, TotalMarks, ScheduledDateTime, CalculatorAllowed)
@@ -71,7 +72,7 @@ const createGeneratedExam = asyncHandler(async (req, res, next) => {
     Title,
     Code,
     SourceExamID,
-    CreatedByAdmin || null,
+    admin.admin_id || null,
     Duration,
     TotalMarks,
     ScheduledDateTime || null,
@@ -112,7 +113,14 @@ const createGeneratedExam = asyncHandler(async (req, res, next) => {
  */
 const getAllGeneratedExams = asyncHandler(async (req, res, next) => {
   try {
-    const [rows] = await db.promise().query(`
+    const admin = req.admin;
+
+    if (!admin || !admin.admin_id) {
+      return next(new ApiError(401, "Unauthorized: Admin not found"));
+    }
+
+    const [rows] = await db.promise().query(
+      `
       SELECT 
         ge.GeneratedExamID,
         ge.Title,
@@ -120,7 +128,7 @@ const getAllGeneratedExams = asyncHandler(async (req, res, next) => {
         ge.SourceExamID,
         e.Title AS SourceExamTitle,
         ge.CreatedByAdmin,
-        a.Name AS CreatedBy,
+        CONCAT(a.FName, ' ', COALESCE(a.MName, ''), ' ', a.LName) AS CreatedBy,
         ge.Duration,
         ge.TotalMarks,
         ge.ScheduledDateTime,
@@ -128,17 +136,24 @@ const getAllGeneratedExams = asyncHandler(async (req, res, next) => {
       FROM GeneratedExams ge
       LEFT JOIN Exams e ON ge.SourceExamID = e.exam_id
       LEFT JOIN Admins a ON ge.CreatedByAdmin = a.admin_id
+      WHERE ge.CreatedByAdmin = ?
       ORDER BY ge.GeneratedExamID DESC
-    `);
+    `,
+      [admin.admin_id]
+    );
 
     return res
       .status(200)
       .json(
-        new ApiResponse(200, rows, "Generated exams fetched successfully.")
+        new ApiResponse(
+          200,
+          rows,
+          "Generated exams fetched for this admin successfully."
+        )
       );
   } catch (error) {
     console.error("Database Error:", error);
-    return res.status(500).json(new ApiResponse(500, [], "Database Error"));
+    return next(new ApiError(500, "Database Error"));
   }
 });
 
@@ -159,10 +174,13 @@ const updateGeneratedExam = asyncHandler(async (req, res, next) => {
     CalculatorAllowed,
   } = req.body;
 
+  if (!id || isNaN(id)) {
+    throw new ApiError(400, "Invalid or missing exam ID parameter.");
+  }
+
   const trimmedTitle = Title?.trim();
   const trimmedCode = Code?.trim();
 
-  // ✅ Check for duplicate code
   if (Code) {
     const [existing] = await db
       .promise()
@@ -175,7 +193,6 @@ const updateGeneratedExam = asyncHandler(async (req, res, next) => {
     }
   }
 
-  // ✅ Validate SourceExamID exists
   if (SourceExamID) {
     const [exam] = await db
       .promise()
@@ -185,22 +202,51 @@ const updateGeneratedExam = asyncHandler(async (req, res, next) => {
     }
   }
 
-  const [result] = await db.promise().query(
-    `UPDATE GeneratedExams 
-     SET Title = ?, Code = ?, SourceExamID = ?, Duration = ?, 
-         TotalMarks = ?, ScheduledDateTime = ?, CalculatorAllowed = ?
-     WHERE GeneratedExamID = ?`,
-    [
-      trimmedTitle,
-      trimmedCode,
-      SourceExamID,
-      Duration,
-      TotalMarks,
-      ScheduledDateTime || null,
-      CalculatorAllowed || false,
-      id,
-    ]
-  );
+  const fields = [];
+  const values = [];
+
+  if (trimmedTitle) {
+    fields.push("Title = ?");
+    values.push(trimmedTitle);
+  }
+  if (trimmedCode) {
+    fields.push("Code = ?");
+    values.push(trimmedCode);
+  }
+  if (SourceExamID) {
+    fields.push("SourceExamID = ?");
+    values.push(SourceExamID);
+  }
+  if (Duration) {
+    fields.push("Duration = ?");
+    values.push(Duration);
+  }
+  if (TotalMarks) {
+    fields.push("TotalMarks = ?");
+    values.push(TotalMarks);
+  }
+  if (ScheduledDateTime) {
+    fields.push("ScheduledDateTime = ?");
+    values.push(ScheduledDateTime);
+  }
+  if (CalculatorAllowed !== undefined) {
+    fields.push("CalculatorAllowed = ?");
+    values.push(CalculatorAllowed);
+  }
+
+  if (fields.length === 0) {
+    throw new ApiError(400, "No fields provided for update.");
+  }
+
+  const query = `
+    UPDATE GeneratedExams
+    SET ${fields.join(", ")}
+    WHERE GeneratedExamID = ?
+  `;
+
+  values.push(id);
+
+  const [result] = await db.promise().query(query, values);
 
   if (result.affectedRows === 0) {
     throw new ApiError(404, "Generated exam not found.");
@@ -216,20 +262,47 @@ const updateGeneratedExam = asyncHandler(async (req, res, next) => {
  * @route DELETE /api/generated-exams/:id
  * @access Private (Admin)
  */
+const deleteGeneratedExam = asyncHandler(async (req, res) => {
+  const { id } = req?.params;
+  const admin = req?.admin;
 
-const deleteGeneratedExam = asyncHandler(async (req, res, next) => {
-  const { id } = req.params;
+  const [rows] = await db.promise().query(
+    `
+      SELECT 
+        ge.GeneratedExamID,
+        ge.Title,
+        ge.Code,
+        ge.SourceExamID,
+        e.Title AS SourceExamTitle,
+        ge.CreatedByAdmin,
+        CONCAT(a.FName, ' ', COALESCE(a.MName, ''), ' ', a.LName) AS CreatedBy,
+        ge.Duration,
+        ge.TotalMarks,
+        ge.ScheduledDateTime,
+        ge.CalculatorAllowed
+      FROM GeneratedExams ge
+      LEFT JOIN Exams e ON ge.SourceExamID = e.exam_id
+      LEFT JOIN Admins a ON ge.CreatedByAdmin = a.admin_id
+      WHERE ge.CreatedByAdmin = ?
+      ORDER BY ge.GeneratedExamID DESC
+    `,
+    [admin.admin_id]
+  );
 
-  const [result] = await db.execute(
-    "DELETE FROM GeneratedExams WHERE GeneratedExamID = ?",
-    [id]
+  if (rows.affectedRows === 0) {
+    throw new ApiError(404, "Generated exam not found.");
+  }
+
+  const result = await dbQuery(
+    "DELETE FROM GeneratedExams WHERE GeneratedExamID = ? AND CreatedByAdmin = ?",
+    [id, admin.admin_id]
   );
 
   if (result.affectedRows === 0) {
     throw new ApiError(404, "Generated exam not found.");
   }
 
-  return res
+  res
     .status(200)
     .json(new ApiResponse(200, null, "Generated exam deleted successfully."));
 });
