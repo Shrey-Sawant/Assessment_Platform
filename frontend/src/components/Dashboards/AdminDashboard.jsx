@@ -2,6 +2,8 @@ import React from 'react';
 import DataList from '../Shared/DataList';
 
 const AdminDashboard = ({ mockData, onAddStudent, onAddTeacher }) => {
+
+    
     // Columns for the mock data tables
     const studentColumns = ['ID', 'Name', 'Email', 'Grade'];
     const teacherColumns = ['ID', 'Name', 'Email', 'Subject'];

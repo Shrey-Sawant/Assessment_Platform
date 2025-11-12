@@ -35,7 +35,7 @@ const generateToken = (admin) => {
  * @desc Register Admin
  */
 const register = asyncHandler(async (req, res, next) => {
-  let { FName, MName, LName, Email, Phone, password } = req.body;
+  let { FName, MName = "", LName, Email, Phone, password } = req.body;
 
   if (!FName || !LName || !Email || !Phone || !password) {
     return next(new ApiError(400, "All fields are required"));
@@ -45,7 +45,6 @@ const register = asyncHandler(async (req, res, next) => {
   MName = MName.trim();
   LName = LName.trim();
   Email = Email.trim();
-  Phone = Phone.trim();
   password = password.trim();
 
   if (Phone.length < 10 || isNaN(Phone)) {
